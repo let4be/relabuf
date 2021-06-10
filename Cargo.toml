@@ -1,12 +1,12 @@
 [package]
 name = "relabuf"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["Sergey F. <let4be@gmail.com>"]
 edition = "2018"
 description = "Release valve buffer release items either after time or number thresholds are reached"
 readme = "README.md"
 license = "MIT"
-repository = "https://github.com/let4be/tracing-tools"
+repository = "https://github.com/let4be/relabuf"
 keywords = ["async", "buffer", "threshold", "rust"]
 
 [dependencies]
