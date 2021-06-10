@@ -12,5 +12,5 @@ Releases content after
 
 ```
 [dependencies]
-crusty-core = "~0.0.0"
+relabuf= "~0.0.0"
 ```
