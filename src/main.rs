@@ -5,7 +5,7 @@ use tokio::time::sleep;
 
 async fn produce(tx: Sender<u32>) {
     for i in 0..16 {
-        sleep(Duration::from_millis(125_u64 * (i as u64))).await;
+        sleep(Duration::from_millis(150_u64 * (i as u64))).await;
         let _ = tx.send_async(i).await;
     }
 }
@@ -22,9 +22,15 @@ async fn main() {
             item = rx.recv_async() => {
                 let _ = buf.add(item);
             }
-            Ok(consumed) = buf.wake() => {
-                println!("consumed {:?}", consumed);
+            wake_reason = buf.wake() => {
+                if let Some(consumed) = buf.try_consume() {
+                    println!("consumed {:?} because {:?}", consumed, wake_reason);
+                }
             }
         }
+    }
+
+    if let Some(consumed) = buf.try_consume() {
+        println!("finished with consumed {:?}", consumed);
     }
 }
