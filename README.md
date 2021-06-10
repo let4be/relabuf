@@ -12,5 +12,5 @@ Releases content after
 
 ```
 [dependencies]
-relabuf= "~0.0.0"
+relabuf = "~0.0.0"
 ```
