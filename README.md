@@ -4,6 +4,6 @@
 # Relabuf - release buffer
 
 Releases content after
- - a configurable time threshold is reached and buffer is not empty 
+ - a configurable time threshold is reached and buffer is not empty
  - a configurable number of items were added
  - exposes a notification via a future(must be selected on)

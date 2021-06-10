@@ -13,4 +13,4 @@ keywords = ["async", "buffer", "threshold", "rust"]
 futures-lite = "^1.11.3"
 anyhow = "^1.0.40"
 tokio = { version = "~1.6.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros", "signal", "sync"] }
-flume = "=0.10.5"
+flume = "~0.10.7"

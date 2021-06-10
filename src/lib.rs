@@ -34,6 +34,10 @@ impl<T: Send + Sync> RelaBuf<T> {
                     }
                 }
             }
+
+            if !buffer.is_empty() {
+                let _ = tx_wake_ch.send(buffer.drain(0..).collect());
+            }
         });
 
         Self { tx_add, rx_wake_ch }
