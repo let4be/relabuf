@@ -24,7 +24,7 @@ async fn main() {
             }
             wake_reason = buf.wake() => {
                 if let Some(consumed) = buf.try_consume() {
-                    println!("consumed {:?} because {:?}", consumed, wake_reason);
+                    println!("consumed {:?} because {:?}, since last consumption {:?}", consumed.items, wake_reason, consumed.elapsed);
                 }
             }
         }
