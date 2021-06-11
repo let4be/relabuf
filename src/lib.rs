@@ -31,10 +31,45 @@ pub struct Released<T> {
     state: Arc<Mutex<State<T>>>,
 }
 
+pub struct ExponentialBackoff {
+    ///  The initial retry interval.
+    pub initial_interval: Duration,
+    /// The randomization factor to use for creating a range around the retry interval.
+    ///
+    /// A randomization factor of 0.5 results in a random period ranging between 50% below and 50%
+    /// above the retry interval.
+    pub randomization_factor: f64,
+    /// The value to multiply the current interval with for each retry attempt.
+    pub multiplier: f64,
+    /// The maximum value of the back off period. Once the retry interval reaches this
+    /// value it stops increasing.
+    pub max_interval: Duration,
+    ///  The maximum elapsed time after instantiating
+    pub max_elapsed_time: Option<Duration>,
+}
+
+impl Default for ExponentialBackoff {
+    fn default() -> Self {
+        let b = backoff::ExponentialBackoff::default();
+        Self {
+            initial_interval: b.initial_interval,
+            randomization_factor: b.randomization_factor,
+            multiplier: b.multiplier,
+            max_interval: b.max_interval,
+            max_elapsed_time: b.max_elapsed_time,
+        }
+    }
+}
+
 impl<T> Released<T> {
-    pub fn return_on_err(&self, items: Vec<T>) {
+    pub fn return_on_err(self) {
         let mut state = self.state.lock().unwrap();
-        state.return_on_err(items);
+        state.return_on_err(self.items);
+    }
+
+    pub fn confirm(self) {
+        let mut state = self.state.lock().unwrap();
+        state.confirm();
     }
 }
 
@@ -42,11 +77,12 @@ pub struct RelaBufConfig {
     pub release_after: Duration,
     pub soft_cap: usize,
     pub hard_cap: usize,
-    pub backoff: Option<backoff::ExponentialBackoff>,
+    pub backoff: Option<ExponentialBackoff>,
 }
 
 struct State<T> {
     buffer: Vec<T>,
+    backoff: Option<backoff::ExponentialBackoff>,
     opts: RelaBufConfig,
 
     last_ok_consume: Instant,
@@ -57,8 +93,21 @@ struct State<T> {
 
 impl<T> State<T> {
     fn new(opts: RelaBufConfig) -> Self {
+        let backoff = opts
+            .backoff
+            .as_ref()
+            .map(|backoff| backoff::ExponentialBackoff {
+                initial_interval: backoff.initial_interval,
+                randomization_factor: backoff.randomization_factor,
+                multiplier: backoff.multiplier,
+                max_interval: backoff.max_interval,
+                max_elapsed_time: backoff.max_elapsed_time,
+                ..backoff::ExponentialBackoff::default()
+            });
+
         Self {
             buffer: vec![],
+            backoff,
             opts,
             last_ok_consume: Instant::now(),
             err: None,
@@ -76,8 +125,15 @@ impl<T> State<T> {
 
     pub fn return_on_err(&mut self, items: Vec<T>) {
         self.buffer.extend(items);
-        if let Some(backoff) = self.opts.backoff.as_mut() {
+        if let Some(backoff) = &mut self.backoff {
             self.next_backoff = backoff.next_backoff();
+        }
+    }
+
+    fn confirm(&mut self) {
+        if let Some(backoff) = &mut self.backoff {
+            self.next_backoff = None;
+            backoff.reset();
         }
     }
 
@@ -115,10 +171,6 @@ impl<T> State<T> {
     }
 
     fn consume(&mut self) -> Consumed<T> {
-        if let Some(backoff) = self.opts.backoff.as_mut() {
-            backoff.reset();
-        }
-
         let elapsed = self.last_ok_consume.elapsed();
         self.last_ok_consume = Instant::now();
         Consumed {
