@@ -15,5 +15,5 @@
 
 ```
 [dependencies]
-relabuf = "~0.5.0"
+relabuf = "~0.6.0"
 ```
