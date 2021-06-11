@@ -7,6 +7,7 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+use tokio::time::timeout;
 
 pub type PinnedFut<'a, T = ()> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type Result<T> = anyhow::Result<T>;
@@ -115,8 +116,8 @@ impl<T> State<T> {
         }
     }
 
-    pub fn is_at_soft_cap(&self) -> bool {
-        self.buffer.len() >= self.opts.soft_cap
+    pub fn can_receive(&self) -> bool {
+        self.buffer.len() < self.opts.soft_cap && self.err.is_none()
     }
 
     pub fn add_item(&mut self, item: T) {
@@ -225,24 +226,19 @@ impl<T: Send + Sync + std::fmt::Debug> RelaBuf<T> {
                     break reason;
                 }
 
-                let t = tokio::time::sleep(Duration::from_millis(100));
-                let is_err = { state.lock().unwrap().err.is_some() };
-                let is_soft_cap = { state.lock().unwrap().is_at_soft_cap() };
-                if is_soft_cap || is_err {
-                    tokio::select! {
-                        _ = t => {}
+                let timeout_dur = Duration::from_millis(100);
+                if state.lock().unwrap().can_receive() {
+                    if let Ok(r) = timeout(timeout_dur, rx_buffer.recv_async()).await {
+                        match r {
+                            Ok(item) => state.lock().unwrap().add_item(item),
+                            Err(err) => state
+                                .lock()
+                                .unwrap()
+                                .set_err(anyhow!("cannot read from buffer channel: {}", err)),
+                        }
                     }
                 } else {
-                    tokio::select! {
-                        r = rx_buffer.recv_async() => {
-                            match r {
-                                Ok(item) => state.lock().unwrap().add_item(item),
-                                Err(err) => state.lock().unwrap().set_err(anyhow!("cannot read from buffer channel: {}",err))
-                            }
-                        },
-
-                        _ = t => {}
-                    }
+                    let _ = timeout(timeout_dur, async {}).await;
                 }
             };
 
