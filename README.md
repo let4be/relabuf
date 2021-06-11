@@ -6,11 +6,12 @@
  - buffers internally up to `hard_cap` 
  - when `hard_cap` is reached no longer consumes from external async source causing it to backoff and slow down
  - capable of releasing content ONLY under certain conditions  
- - a configurable time threshold is reached and buffer is not empty
- - a configurable number of items were added
- - each consumption should be either confirmed or returned to buffer
+ - a `release_after` has passed since the latest successful release and buffer is not empty
+ - a `soft_cap` of items were added
+ - each consumption should be either `confirmed` or `returned` to buffer
  - returns usually happen due to error - so it's possible to configure a backoff
  - backoff essentially overrides time release valve
+ - exposes released items via a future user can `await` on
 ## Install
 
 ```
