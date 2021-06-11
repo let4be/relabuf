@@ -1,9 +1,10 @@
+use anyhow::Context;
 use flume::{bounded, Sender};
-use relabuf::RelaBuf;
+use relabuf::{RelaBuf, RelaBufConfig};
 use std::time::Duration;
 use tokio::time::sleep;
 
-async fn produce(tx: Sender<u32>) {
+async fn producer(tx: Sender<u32>) {
     for i in 0..16 {
         sleep(Duration::from_millis(150_u64 * (i as u64))).await;
         let _ = tx.send_async(i).await;
@@ -14,23 +15,24 @@ async fn produce(tx: Sender<u32>) {
 async fn main() {
     let (tx, rx) = bounded(100);
 
-    tokio::spawn(produce(tx));
+    tokio::spawn(producer(tx));
 
-    let mut buf = RelaBuf::new(Duration::from_secs(5), 3);
-    while !rx.is_disconnected() {
-        tokio::select! {
-            item = rx.recv_async() => {
-                let _ = buf.add(item);
-            }
-            wake_reason = buf.wake() => {
-                if let Some(consumed) = buf.try_consume() {
-                    println!("consumed {:?} because {:?}, since last consumption {:?}", consumed.items, wake_reason, consumed.elapsed);
-                }
-            }
-        }
-    }
+    let opts = RelaBufConfig {
+        soft_cap: 3,
+        hard_cap: 5,
+        release_after: Duration::from_secs(5),
+        backoff: Some(backoff::ExponentialBackoff::default()),
+    };
 
-    if let Some(consumed) = buf.try_consume() {
-        println!("finished with consumed {:?}", consumed);
+    let buf = RelaBuf::new(opts, move || {
+        let rx = rx.clone();
+        Box::pin(async move { rx.recv_async().await.context("cannot read") })
+    });
+    while let Ok(consumed) = buf.next().await {
+        println!(
+            "consumed {:?} because {:?}, since last consumption {:?}",
+            consumed.items, consumed.reason, consumed.elapsed
+        );
     }
+    println!("done ;)");
 }
