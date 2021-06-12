@@ -68,7 +68,7 @@ impl<T> Released<T> {
         state.return_on_err(self.items);
     }
 
-    pub fn confirm(self) {
+    pub fn confirm(&self) {
         let mut state = self.state.lock().unwrap();
         state.confirm();
     }
