@@ -57,7 +57,7 @@ impl Default for ExponentialBackoff {
             randomization_factor: b.randomization_factor,
             multiplier: b.multiplier,
             max_interval: b.max_interval,
-            max_elapsed_time: b.max_elapsed_time,
+            max_elapsed_time: None,
         }
     }
 }
