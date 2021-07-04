@@ -12,6 +12,6 @@ keywords = ["async", "buffer", "threshold", "rust"]
 [dependencies]
 futures-lite = "^1.11.3"
 anyhow = "^1.0.40"
-tokio = { version = "~1.7.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros", "signal", "sync"] }
+tokio = { version = "~1.8.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros", "signal", "sync"] }
 flume = "~0.10.7"
 backoff = {version = "~0.3.0", features = ["tokio", "futures"] }
