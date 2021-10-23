@@ -16,7 +16,7 @@
 
 ```
 [dependencies]
-relabuf = "~0.13.0"
+relabuf = "~0.14.0"
 ```
 
 example:
