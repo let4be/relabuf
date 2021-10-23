@@ -57,12 +57,12 @@ async fn main() {
         }),
     };
 
-    let buf = RelaBuf::new(opts, move || {
+    let (buf, proxy) = RelaBuf::new(opts, move || {
         let rx = rx.clone();
         Box::pin(async move { rx.recv_async().await.context("cannot read") })
     });
     
-    tokio::spawn(buf.go());
+    tokio::spawn(proxy.go());
 
     let mut i = 0;
 

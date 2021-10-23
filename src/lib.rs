@@ -182,25 +182,17 @@ impl<T> State<T> {
     }
 }
 
-pub struct RelaBuf<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>> {
+pub struct RelaBuf<T> {
     rx_buffer: Receiver<T>,
-    tx_buffer: Sender<T>,
     state: Arc<Mutex<State<T>>>,
+}
+
+pub struct RelaBufProxy<T, F> {
+    tx_buffer: Sender<T>,
     recv: F,
 }
 
-impl<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>> RelaBuf<'a, T, F> {
-    pub fn new(
-        opts: RelaBufConfig,
-        recv: F,
-    ) -> Self {
-        let (tx_buffer, rx_buffer) = bounded::<T>(opts.hard_cap);
-
-        let state = Arc::new(Mutex::new(State::new(opts)));
-
-        Self { tx_buffer, rx_buffer, recv, state }
-    }
-
+impl<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>> RelaBufProxy<T, F> {
     pub async fn go(&self) {
         while !self.tx_buffer.is_disconnected() {
             let item = (self.recv)().await;
@@ -212,6 +204,19 @@ impl<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() ->
             }
             break
         }
+    }
+}
+
+impl<'a, T: 'static + Send + Sync + std::fmt::Debug> RelaBuf<T> {
+    pub fn new<F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>>(
+        opts: RelaBufConfig,
+        recv: F,
+    ) -> (Self, RelaBufProxy<T, F>) {
+        let (tx_buffer, rx_buffer) = bounded::<T>(opts.hard_cap);
+
+        let state = Arc::new(Mutex::new(State::new(opts)));
+
+        (Self { rx_buffer, state }, RelaBufProxy{tx_buffer, recv})
     }
 
     pub fn next(&self) -> PinnedFut<'static, Result<Released<T>>> {
