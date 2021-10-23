@@ -1,13 +1,14 @@
 use anyhow::anyhow;
 use backoff::backoff::Backoff;
-use flume::{bounded, Receiver};
+use flume::{bounded, Receiver, Sender};
 use futures_lite::Future;
 use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tokio::time::timeout;
+use smol_timeout::TimeoutExt;
+use async_io::Timer;
 
 pub type PinnedFut<'a, T = ()> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type Result<T> = anyhow::Result<T>;
@@ -181,13 +182,15 @@ impl<T> State<T> {
     }
 }
 
-pub struct RelaBuf<T: 'static + Send + Sync + std::fmt::Debug> {
+pub struct RelaBuf<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>> {
     rx_buffer: Receiver<T>,
+    tx_buffer: Sender<T>,
     state: Arc<Mutex<State<T>>>,
+    recv: F,
 }
 
-impl<T: Send + Sync + std::fmt::Debug> RelaBuf<T> {
-    pub fn new<'a, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>>(
+impl<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>> RelaBuf<'a, T, F> {
+    pub fn new(
         opts: RelaBufConfig,
         recv: F,
     ) -> Self {
@@ -195,25 +198,20 @@ impl<T: Send + Sync + std::fmt::Debug> RelaBuf<T> {
 
         let state = Arc::new(Mutex::new(State::new(opts)));
 
-        {
-            tokio::spawn(async move {
-                while !tx_buffer.is_disconnected() {
-                    tokio::select! {
-                        item = recv() => {
-                            if let Ok(item) = item {
-                                if tx_buffer.send_async(item).await.is_err() {
-                                    break
-                                }
-                            } else {
-                                break
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        Self { tx_buffer, rx_buffer, recv, state }
+    }
 
-        Self { rx_buffer, state }
+    pub async fn go(&self) {
+        while !self.tx_buffer.is_disconnected() {
+            let item = (self.recv)().await;
+            if let Ok(item) = item {
+                if self.tx_buffer.send_async(item).await.is_err() {
+                    break
+                }
+                continue
+            }
+            break
+        }
     }
 
     pub fn next(&self) -> PinnedFut<'static, Result<Released<T>>> {
@@ -228,7 +226,7 @@ impl<T: Send + Sync + std::fmt::Debug> RelaBuf<T> {
 
                 let timeout_dur = Duration::from_millis(100);
                 if state.lock().unwrap().can_receive() {
-                    if let Ok(r) = timeout(timeout_dur, rx_buffer.recv_async()).await {
+                    if let Some(r) = rx_buffer.recv_async().timeout(timeout_dur).await {
                         match r {
                             Ok(item) => state.lock().unwrap().add_item(item),
                             Err(err) => state
@@ -238,7 +236,7 @@ impl<T: Send + Sync + std::fmt::Debug> RelaBuf<T> {
                         }
                     }
                 } else {
-                    let _ = timeout(timeout_dur, async {}).await;
+                    Timer::interval(timeout_dur).await;
                 }
             };
 

@@ -12,6 +12,7 @@ keywords = ["async", "buffer", "threshold", "rust"]
 [dependencies]
 futures-lite = "^1.11.3"
 anyhow = "^1.0.40"
-tokio = { version = "~1.11.0", features = ["rt", "rt-multi-thread", "io-util", "net", "time", "macros", "signal", "sync"] }
+smol-timeout = "~0.6.0"
+async-io = "1.6.0"
 flume = "~0.10.7"
 backoff = {version = "~0.3.0", features = ["tokio", "futures"] }
