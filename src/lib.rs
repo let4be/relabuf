@@ -193,7 +193,7 @@ pub struct RelaBufProxy<T, F> {
 }
 
 impl<'a, T: 'static + Send + Sync + std::fmt::Debug, F: 'static + Send + Fn() -> PinnedFut<'a, Result<T>>> RelaBufProxy<T, F> {
-    pub async fn go(&self) {
+    pub async fn go(self) {
         while !self.tx_buffer.is_disconnected() {
             let item = (self.recv)().await;
             if let Ok(item) = item {
